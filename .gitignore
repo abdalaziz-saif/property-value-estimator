@@ -5,7 +5,11 @@ models/
 *.pkl
 *.zip
 
-outputs/
+venv/
+
+
+catboost_info/
+
 
 __pycache__/
 *.pyc
