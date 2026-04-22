@@ -4,6 +4,7 @@ Exploratory Data Analysis
 Univariate / bivariate / multivariate plots and missing-value diagnostics
 """
 
+import os
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -28,7 +29,7 @@ def missing_summary(df: pd.DataFrame, label: str = "") -> pd.DataFrame:
     return result
 
 
-def plot_missing_effect(train: pd.DataFrame) -> None:
+def plot_missing_effect(train: pd.DataFrame, output_dir: str = None) -> None:
     """Bar-plot median SalePrice for present vs absent features."""
     feature_with_na = [c for c in train.columns if train[c].isna().sum() > 1]
     fig, axs = plt.subplots(5, 4, figsize=(15, 15))
@@ -41,15 +42,25 @@ def plot_missing_effect(train: pd.DataFrame) -> None:
         )
         ax.set_title(col)
     plt.tight_layout()
-    plt.show()
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        plt.savefig(os.path.join(output_dir, "missing_effect.png"))
+        plt.close()
+    else:
+        plt.show()
 
 
-def plot_missing_heatmap(train: pd.DataFrame) -> None:
+def plot_missing_heatmap(train: pd.DataFrame, output_dir: str = None) -> None:
     """Heatmap of missing value locations."""
     plt.figure(figsize=(18, 7))
     sns.heatmap(train.isnull(), cmap=sns.color_palette(["#34495E", "seagreen"]))
     plt.title("Missing Values Heatmap")
-    plt.show()
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        plt.savefig(os.path.join(output_dir, "missing_heatmap.png"))
+        plt.close()
+    else:
+        plt.show()
 """________________________________________________________
 
 Data type sepration 
@@ -73,48 +84,68 @@ def get_continuous_features(df: pd.DataFrame, numerical: list, years: list, disc
 
 
 # years plot _______________________
-def plot_age_distributions(df: pd.DataFrame) -> None:
+def plot_age_distributions(df: pd.DataFrame, output_dir: str = None) -> None:
     fig, axes = plt.subplots(1, 3, figsize=(18, 4))
     for ax, feat in zip(axes, ["HouseAge", "remodAge", "garageAge"]):
         sns.histplot(x=feat, data=df, ax=ax, color="steelblue", kde=True)
         ax.set_title(f"{feat} Distribution")
     plt.tight_layout()
-    plt.show()
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        plt.savefig(os.path.join(output_dir, "age_distributions.png"))
+        plt.close()
+    else:
+        plt.show()
 
 # discrete plot _______________________
-def plot_discrete_univariate(df: pd.DataFrame, discrete_features: list) -> None:
+def plot_discrete_univariate(df: pd.DataFrame, discrete_features: list, output_dir: str = None) -> None:
     fig, ax = plt.subplots(4, 4, figsize=(20, 20))
     for feat, axi in zip(discrete_features, ax.flatten()):
         sns.countplot(x=feat, data=df, ax=axi)
         axi.set_title(feat)
     plt.tight_layout()
-    plt.show()
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        plt.savefig(os.path.join(output_dir, "discrete_univariate.png"))
+        plt.close()
+    else:
+        plt.show()
 
 # contious features Plots ___________________
-def plot_cont_univ(df: pd.DataFrame, continuous_features: list) -> None:
+def plot_cont_univ(df: pd.DataFrame, continuous_features: list, output_dir: str = None) -> None:
     """Univariate histograms for all continuous numerical features."""
     fig, ax = plt.subplots(7, 3, figsize=(30, 40))
     for feat, axi in zip(continuous_features, ax.flatten()):
         sns.histplot(x=feat, data=df, ax=axi)
         axi.set_title(feat)
     plt.tight_layout()
-    plt.show()
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        plt.savefig(os.path.join(output_dir, "cont_univ.png"))
+        plt.close()
+    else:
+        plt.show()
 
 
-def plot_cont_biv(df: pd.DataFrame, continuous_features: list) -> None:
+def plot_cont_biv(df: pd.DataFrame, continuous_features: list, output_dir: str = None) -> None:
     """Bivariate scatter plots of continuous features vs SalePrice."""
     fig, axs = plt.subplots(7, 3, figsize=(20, 30))
     for feat, ax in zip(continuous_features, axs.flatten()):
         sns.scatterplot(
             x=feat, y="SalePrice", hue="SalePrice",
-            data=df[continuous_features + ["SalePrice"]].dropna(subset=[feat]),
+            data=df[[feat, "SalePrice"]].dropna(subset=[feat]),
             ax=ax, palette="viridis_r"
         )
         ax.set_xlabel(feat)
         ax.set_ylabel("SalePrice")
         ax.set_title(f"SalePrice — {feat}")
     plt.tight_layout()
-    plt.show()
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        plt.savefig(os.path.join(output_dir, "cont_biv.png"))
+        plt.close()
+    else:
+        plt.show()
 
 
 def print_skewness(df: pd.DataFrame, continuous_features: list, threshold: float = 0.75) -> None:
@@ -125,7 +156,7 @@ def print_skewness(df: pd.DataFrame, continuous_features: list, threshold: float
 
 
 # Categorical Features Plots ___________________________
-def plot_univariate_and_bivariate_categorical(train: pd.DataFrame, features: list, color: str) -> None:
+def plot_univariate_and_bivariate_categorical(train: pd.DataFrame, features: list, color: str, output_dir: str = None, name: str = "categorical") -> None:
     """
     Univariate bar and bivariate box plots for
     categorical (ordinal or nominal) features
@@ -147,7 +178,12 @@ def plot_univariate_and_bivariate_categorical(train: pd.DataFrame, features: lis
         axes[i][1].set_ylabel("SalePrice")
     plt.suptitle("")
     plt.tight_layout()
-    plt.show()
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        plt.savefig(os.path.join(output_dir, f"{name}_bivariate.png"))
+        plt.close()
+    else:
+        plt.show()
 
 
 """________________________________________________________________________________________________
@@ -157,14 +193,19 @@ Multivariate Analysis
 ______________________________________________________________________________________________"""""
 
 # pairplot
-def plot_PairPlot(train: pd.DataFrame, numerical_features: list, n: int = 6) -> None:
+def plot_PairPlot(train: pd.DataFrame, numerical_features: list, n: int = 6, output_dir: str = None) -> None:
     corr        = train[numerical_features].corr()["SalePrice"]
     top_features = corr.abs().sort_values(ascending=False).head(n).index.tolist()
     sns.pairplot(train[top_features])
-    plt.show()
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        plt.savefig(os.path.join(output_dir, "pairplot.png"))
+        plt.close()
+    else:
+        plt.show()
 
 # correlation heatmap
-def plot_correlation_heatmap(train: pd.DataFrame, numerical_features: list) -> None:
+def plot_correlation_heatmap(train: pd.DataFrame, numerical_features: list, output_dir: str = None) -> None:
     plt.subplots(figsize=(30, 20))
     mask = np.zeros_like(train[numerical_features].corr(), dtype=bool)
     mask[np.triu_indices_from(mask)] = True
@@ -174,10 +215,15 @@ def plot_correlation_heatmap(train: pd.DataFrame, numerical_features: list) -> N
         mask=mask, annot=True, center=0,
     )
     plt.title("Feature Correlation Heatmap")
-    plt.show()
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        plt.savefig(os.path.join(output_dir, "correlation_heatmap.png"))
+        plt.close()
+    else:
+        plt.show()
 
 # target distribution
-def plot_target_distribution(train: pd.DataFrame) -> None:
+def plot_target_distribution(train: pd.DataFrame, output_dir: str = None) -> None:
     """Plot raw and log-transformed SalePrice."""
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
     sns.histplot(x="SalePrice", data=train, color="skyblue", ax=axes[0])
@@ -185,6 +231,11 @@ def plot_target_distribution(train: pd.DataFrame) -> None:
     sns.histplot(x=np.log1p(train["SalePrice"]), color="salmon", ax=axes[1])
     axes[1].set_title("log1p(SalePrice)")
     plt.tight_layout()
-    plt.show()
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        plt.savefig(os.path.join(output_dir, "target_distribution.png"))
+        plt.close()
+    else:
+        plt.show()
     print(f"Skew    : {train['SalePrice'].skew():.4f}")
     print(f"Kurtosis: {train['SalePrice'].kurtosis():.4f}")

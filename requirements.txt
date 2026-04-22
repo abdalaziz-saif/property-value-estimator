@@ -1,10 +1,10 @@
 lightgbm
 xgboost
-sklearn
-numpy 
-matplotlib 
-joblib 
-pandas 
-seaborn 
+scikit-learn
+numpy
+matplotlib
+joblib
+pandas
+seaborn
 scipy
-argparsy
+catboost

@@ -3,18 +3,21 @@ Modeling module.
 Base models, hyperparameter tuning, stacking, blending, and evaluation
 """
 
+import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
 from sklearn.base import clone
-from sklearn.linear_model import LinearRegression, Lasso, Ridge
+from sklearn.linear_model import LinearRegression, Lasso, Ridge, ElasticNet
 from sklearn.ensemble import (
     RandomForestRegressor,
     GradientBoostingRegressor,
     StackingRegressor,
     IsolationForest,
+    
 )
+from catboost import CatBoostRegressor
 from sklearn.model_selection import KFold, GridSearchCV, RandomizedSearchCV
 from sklearn.metrics import root_mean_squared_error
 from xgboost import XGBRegressor
@@ -61,9 +64,9 @@ def evaluate_model(
     print(f"  Val RMSE   : {val_rmse:.4f}")
     gap = val_rmse - train_rmse
     if gap > 0.02:
-        print(f"  ⚠Overfitting ~ gap: {gap:.4f}")
+        print(f"  Overfitting ~ gap: {gap:.4f}")
     else:
-        print(f"  ✓Healthy — gap: {gap:.4f}")
+        print(f"  Healthy — gap: {gap:.4f}")
 
     return cv_rmse, val_rmse, model
 
@@ -92,7 +95,7 @@ def tune_lasso(
 #   Ridge 
 # ─────────────────────────────────────────────
 
-def ridge_model(
+def tune_ridge(
     X_train: pd.DataFrame,
     y_train: pd.Series,
     X_val: pd.DataFrame,y_val: pd.Series,
@@ -105,6 +108,39 @@ def ridge_model(
     print(f"Best Ridge params: {grid.best_params_}")
     return evaluate_model("Ridge", grid.best_estimator_, X_train, y_train, X_val, y_val, kf)
 
+
+
+#_____________________________________________________
+#  ElasticNet
+
+def tune_elasticNet(
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    X_val: pd.DataFrame,
+    y_val: pd.Series,
+    kf: KFold,
+) -> tuple[float, float, ElasticNet]:
+
+    en_params = {
+        'alpha':    [0.0001, 0.001, 0.01, 0.1],
+        'l1_ratio': [0.1, 0.3, 0.5, 0.7, 0.9],
+        'max_iter': [5000]
+    }
+
+    en_grid = GridSearchCV(
+        ElasticNet(random_state=42),
+        en_params,
+        cv=5,
+        scoring='neg_mean_squared_error',
+        n_jobs=-1
+    )
+    en_grid.fit(X_train, y_train)
+    best_en = en_grid.best_estimator_
+    print(f"Best ElasticNet params: {en_grid.best_params_}")
+
+    return evaluate_model(
+        'ElasticNet', best_en, X_train, y_train, X_val, y_val, kf
+    )
 
 # ─────────────────────────────────────────────
 # XGBoost Model
@@ -164,6 +200,37 @@ def tune_lightgbm(
     )
     return evaluate_model("LightGBM", best_lgb, X_train, y_train, X_val, y_val, kf)
 
+def tune_catboost (    
+    X_train: pd.DataFrame,y_train: pd.Series,
+    X_val: pd.DataFrame,y_val: pd.Series,
+    kf: KFold) -> tuple[float, float, CatBoostRegressor]:
+
+
+    best_cat = CatBoostRegressor(
+        iterations    = 1000,
+        learning_rate = 0.03,
+        depth         = 6,
+        l2_leaf_reg   = 3,
+        random_seed   = 42,
+        eval_metric   = 'RMSE',
+        verbose       = False
+    )
+
+    best_cat.fit(
+        X_train, y_train,
+        eval_set            = (X_val, y_val),
+        early_stopping_rounds = 50
+    )
+
+    return  evaluate_model(
+        'CatBoost', best_cat, X_train, y_train, X_val, y_val, kf
+    )
+
+
+
+
+
+
 
 # ─────────────────────────────────────────────
 #   Random Forest Model
@@ -216,7 +283,7 @@ def tune_gbm(
 # ─────────────────────────────────────────────
 
 def build_stack(
-    best_ridge, best_lasso, best_xgb, best_gbm, best_lgb,
+    best_ridge, best_lasso, best_xgb, best_elastic, best_cat,
     X_train: pd.DataFrame,
     y_train: pd.Series,
     X_val: pd.DataFrame,
@@ -227,12 +294,12 @@ def build_stack(
         ("ridge",    best_ridge),
         ("lasso",    best_lasso),
         ("xgb",      best_xgb),
-        ("gbm",      best_gbm),
-        ("lightgbm", best_lgb),
+        ("elasticnet" , best_elastic),
+        ("catboost" , best_cat),
     ]
     stack = StackingRegressor(
         estimators=base_models,
-        final_estimator=LinearRegression(),
+        final_estimator=Ridge(),
         cv=5, n_jobs=-1,
     )
     return evaluate_model("Stacking", stack, X_train, y_train, X_val, y_val, kf)
@@ -277,7 +344,7 @@ def build_stack(
 #  Comparison plots
 # ─────────────────────────────────────────────
 
-def plot_model_comparison(results: dict) -> None:
+def plot_model_comparison(results: dict, output_dir: str = None) -> None:
     """Bar plot of validation RMSE across models"""
     models = list(results.keys())
     scores = list(results.values())
@@ -287,10 +354,15 @@ def plot_model_comparison(results: dict) -> None:
     plt.ylabel("RMSE")
     plt.xticks(rotation=45)
     plt.tight_layout()
-    plt.show()
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        plt.savefig(os.path.join(output_dir, "model_comparison.png"))
+        plt.close()
+    else:
+        plt.show()
 
 # plot_cv vs val rsults 
-def plot_cv_vs_val(cv_scores: dict, val_scores: dict) -> None:
+def plot_cv_vs_val(cv_scores: dict, val_scores: dict, output_dir: str = None) -> None:
     """Grouped bar: CV RMSE vs Validation RMSE per model"""
     models = list(cv_scores.keys())
     cv  = list(cv_scores.values())
@@ -304,4 +376,9 @@ def plot_cv_vs_val(cv_scores: dict, val_scores: dict) -> None:
     plt.title("CV vs Validation RMSE")
     plt.legend()
     plt.tight_layout()
-    plt.show()
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        plt.savefig(os.path.join(output_dir, "cv_vs_val.png"))
+        plt.close()
+    else:
+        plt.show()
