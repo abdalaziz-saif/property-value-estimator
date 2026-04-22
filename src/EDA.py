@@ -11,34 +11,45 @@ import matplotlib.pyplot as plt
 from scipy.stats import skew
 
 
-# percentage of missing values in each column
-def missing_percentage (df : pd.Dataframe)-> pd.DataFrame : 
-    mising_values = df.isna().sum()
-    mising_percent = ((df.isna().sum())/len(df))*100
 
-    missing = pd.concat([mising_values , mising_percent] ,keys=['Total','Percentage'],axis = 1 )
-    result = missing[missing['Percentage'] > 0 ].sort_values(by='Percentage',ascending= False)
+def missing_summary(df: pd.DataFrame, label: str = "") -> pd.DataFrame:
+    """return a DataFrame with count and percentage of missing values"""
+    total = df.isna().sum()
+    pct   = (df.isna().mean() * 100)
+    result = (
+        pd.concat([total, pct], keys=["Total", "Percentage"], axis=1)
+        .loc[lambda d: d["Percentage"] > 0]
+        .sort_values("Percentage", ascending=False)
+    )
+    result["Percentage"] = result["Percentage"].map(lambda x: f"{x:.2f}%")
+    if label:
+        print(f"\n── missing value ({label}) ──")
+        print(result.to_string())
+    return result
 
-    result['Percentage'] = result['Percentage'].map(lambda x : f"{x :.2f}%")
-    
-    return result 
 
-
-# ploting The affect of missing values on the target variable 
-def missing_plot (df :pd.DataFrame) :
-
-    feature_with_na = [feture for feture in df.columns if df[feture].isna().sum() > 1]
-
+def plot_missing_effect(train: pd.DataFrame) -> None:
+    """Bar-plot median SalePrice for present vs absent features."""
+    feature_with_na = [c for c in train.columns if train[c].isna().sum() > 1]
     fig, axs = plt.subplots(5, 4, figsize=(15, 15))
-    fig.patch.set_facecolor('#D5DDE3')
-
-    data = df.copy()
-    for x, ax in zip(feature_with_na, axs.flatten()):
-        data[x] = data[x].isnull().astype(int)
-        data.groupby(x)['SalePrice'].median().plot.bar(ax=ax, color=['#64877D','#727C85'],edgecolor='white', linewidth=0.5)
+    fig.patch.set_facecolor("#D5DDE3")
+    data = train.copy()
+    for col, ax in zip(feature_with_na, axs.flatten()):
+        data[col] = data[col].isnull().astype(int)
+        data.groupby(col)["SalePrice"].median().plot.bar(
+            ax=ax, color=["#64877D", "#727C85"], edgecolor="white", linewidth=0.5
+        )
+        ax.set_title(col)
     plt.tight_layout()
     plt.show()
 
+
+def plot_missing_heatmap(train: pd.DataFrame) -> None:
+    """Heatmap of missing value locations."""
+    plt.figure(figsize=(18, 7))
+    sns.heatmap(train.isnull(), cmap=sns.color_palette(["#34495E", "seagreen"]))
+    plt.title("Missing Values Heatmap")
+    plt.show()
 """________________________________________________________
 
 Data type sepration 

@@ -3,7 +3,7 @@ Feature Engineering
 """
 import numpy as np
 import pandas as pd
-
+from sklearn.ensemble import IsolationForest
 
 
 """─────────────────────────────────────────────
@@ -11,7 +11,8 @@ import pandas as pd
 ─────────────────────────────────────────────"""
 
 def add_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Add TotalSF, TotalBath, HasGarage, and age features."""
+    """Add TotalSF, TotalBath, HasGarage, TotalPorchSF , QualDF, TotalBath2 and age features."""
+
     df = df.copy()
     df["TotalSF"]  = df["TotalBsmtSF"] + df["1stFlrSF"] + df["2ndFlrSF"]
     df["TotalBath"] = (
@@ -19,13 +20,24 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
         + df["BsmtFullBath"] + 0.5 * df["BsmtHalfBath"]
     )
     df["HasGarage"] = (df["GarageArea"] > 0).astype(int)
-    return df
+  
+    
+    df['TotalPorchSF'] = (
+        df['OpenPorchSF'] + df['EnclosedPorch'] + df['WoodDeckSF'] + df.get('ScreenPorch', 0) +
+        df.get('3SsnPorch', 0)
+    )
 
+    # quality × size interaction 
+    df['QualSF'] = df['OverallQual'] * df['GrLivArea']
+
+    # bath squared 
+    df['TotalBath2'] = df['TotalBath'] ** 2
+    return df   
 
 def years_mod(df: pd.DataFrame) -> pd.DataFrame:
     """Convert raw year columns to age features."""
     df = df.copy()
-    df["HouseAge"]  = df["YrSold"] - df["YearBuilt"]
+    df["HouseAge"]  = df["YrSold"] - df["YearBuilt"] .clip()
     df["garageAge"] = (df["YrSold"] - df["GarageYrBlt"]).fillna(0)
     df["remodAge"]  = df["YrSold"] - df["YearRemodAdd"]
     return df
@@ -98,7 +110,7 @@ def impute(df: pd.DataFrame) -> pd.DataFrame:
 ─────────────────────────────────────────────"""
 
 FLAG_COLS       = ["MasVnrArea", "BsmtFinSF1", "TotalBsmtSF", "2ndFlrSF",
-                   "WoodDeckSF", "OpenPorchSF", "TotalSF"]
+                   "WoodDeckSF", "OpenPorchSF", 'TotalPorchSF']
 FLAG_THEN_DROP  = ["BsmtFinSF2", "EnclosedPorch"]
 
 # flag  create binary indicator for whether feature is present  and drop original feature if it's mostly zeros
@@ -122,7 +134,7 @@ LOG_COLS = [
     "GrLivArea", "LotArea", "LotFrontage", "BsmtUnfSF",
     "1stFlrSF", "GarageArea", "MasVnrArea", "BsmtFinSF1",
     "TotalBsmtSF", "2ndFlrSF", "WoodDeckSF", "OpenPorchSF",
-    "HouseAge", "remodAge", "garageAge",
+    "HouseAge", "remodAge", "garageAge",'TotalPorchSF', 'QualSF'
 ]
 
 # Log transform skewed numerical features 
@@ -140,10 +152,17 @@ def transform(df: pd.DataFrame) -> pd.DataFrame:
 
 def remove_manual_outliers(train: pd.DataFrame) -> pd.DataFrame:
     """Drop the two large cheap houses that confuse tree models."""
-    idx = train[(train["GrLivArea"] > 8.25) & (train["SalePrice"] < 12.5)].index
-    print(f"Manual outliers removed: {len(idx)}")
-    return train.drop(idx)
 
+
+    outlier_idx = train[
+        (train['GrLivArea'] > np.log1p(4000)) &   
+        (train['SalePrice'] < np.log1p(200000))    
+    ].index
+
+    train = train.drop(outlier_idx)
+    print(f"REMOVED {len(outlier_idx)} ROWS")
+
+    return train 
 
 def remove_isolation_forest_outliers(
     X_train: pd.DataFrame,
@@ -152,7 +171,7 @@ def remove_isolation_forest_outliers(
     contamination: float = 0.02,
     random_state: int = 42,
 ) -> tuple[pd.DataFrame, pd.Series]:
-    from sklearn.ensemble import IsolationForest
+    
 
     clean_feats = [f for f in top_features if f in X_train.columns]
     iso  = IsolationForest(contamination=contamination, random_state=random_state)
@@ -253,7 +272,7 @@ def encode_nominal(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# ─────────────────────────────────────────────
+
 #  run full pipeline on train+test to avoid column mismatch after encoding
 # ─────────────────────────────────────────────
 
